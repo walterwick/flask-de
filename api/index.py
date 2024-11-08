@@ -63,7 +63,7 @@ def profile():
             <p>Takipçiler: {data['followers']}</p>
             <p>Takip Edilenler: {data['followees']}</p>
             <p>Biyografi: {data['bio']}</p>
-            <p>Tam Ad:{data['full_name']}</p>
+            <p>Tam0 Ad:{data['full_name']}</p>
             <a href="{data['profile_pic_url']}">pfp</a>
 
             <img src="data:image/jpeg;base64,{profile_pic_base64}" alt="Profil Resmi">
