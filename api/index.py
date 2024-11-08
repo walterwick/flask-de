@@ -1,101 +1,74 @@
-from flask import Flask, render_template_string
-from binance.client import Client
-from dotenv import load_dotenv
-import os
-import requests
-
-# .env dosyasını yükle
-load_dotenv()
-
-# API anahtarlarını .env dosyasından al
-api_key = os.getenv('API_KEY')
-api_secret = os.getenv('API_SECRET')
+from flask import Flask, render_template_string, request, redirect, url_for
+import json
+import httpx
+import base64
 
 app = Flask(__name__)
 
+# Initialize the HTTP client with headers
+client = httpx.Client(
+    headers={
+        "x-ig-app-id": "936619743392459",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9,ru;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept": "*/*",
+    }
+)
+
+# Function to scrape Instagram user data
+def scrape_user(username: str):
+    result = client.get(
+        f"https://i.instagram.com/api/v1/users/web_profile_info/?username={username}",
+    )
+    data = json.loads(result.content)
+    user_data = data["data"]["user"]
+
+    # Fetch profile picture and encode it in Base64
+    profile_pic_url = user_data["profile_pic_url_hd"]
+    response = client.get(profile_pic_url)
+    profile_pic_base64 = base64.b64encode(response.content).decode('utf-8')
+    
+    # Add Base64-encoded image to user_data
+    user_data["profile_pic_base64"] = profile_pic_base64
+    return user_data
+
+# Redirect from root to /profile with default username
 @app.route('/')
-def index():
-    total_value_in_usd = 0.0
-    balances = []
+def home():
+    return redirect(url_for('profile', username="emineey41"))
 
-    # Binance istemcisini oluşturun
-    client = Client(api_key, api_secret)
+# Flask route to display user profile information
+@app.route('/profile')
+def profile():
+    # Get the username from the query parameters
+    username = request.args.get('username', "emineey41")
+    user_data = scrape_user(username)
 
-    # Hesap bilgilerini alın
-    account_info = client.get_account()
-
-    for balance in account_info['balances']:
-        asset = balance['asset']
-        free_balance = float(balance['free'])
-        
-        if free_balance > 0:
-            # Her bir kripto paranın USD cinsinden fiyatını alın
-            try:
-                if asset != 'USDT':
-                    price = client.get_symbol_ticker(symbol=f"{asset}USDT")['price']
-                    value_in_usd = free_balance * float(price)
-                else:
-                    value_in_usd = free_balance  # USDT cinsinden zaten
-            except Exception as e:
-                print(f"{asset} için fiyat alınamadı: {e}")
-                continue
-            
-            balances.append({
-                'coin': asset,
-                'balance': free_balance,
-                'value_in_usd': value_in_usd
-            })
-            total_value_in_usd += value_in_usd
-
-    # USDT/TRY fiyatını Binance API üzerinden alın
-    try:
-        usdt_try_price = float(requests.get("https://api.binance.com/api/v3/ticker/price?symbol=USDTTRY").json()['price'])
-        total_value_in_try = total_value_in_usd * usdt_try_price
-    except Exception as e:
-        print(f"USDT/TRY fiyatı alınamadı: {e}")
-        total_value_in_try = None
-
-    # HTML içeriği
-    html_content = '''
+    # Define an HTML template for rendering the user data
+    html_template = """
     <!DOCTYPE html>
-    <html lang="tr">
+    <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>"{{ total_value_in_usd }}"</title>
+        <title>{{ user_data['username'] }}'s Profile</title>
     </head>
     <body>
-        <h1>Binance Bakiye Kontrol</h1>
-        <form method="POST">
-            <input type="submit" value="Bakiye Kontrol Et">
-        </form>
-
-        {% if balances %}
-            <h2>Bakiye Bilgileri</h2>
-            <table border="1">
-                <tr>
-                    <th>Coin</th>
-                    <th>Bakiye</th>
-                    <th>Değer (USD)</th>
-                </tr>
-                {% for balance in balances %}
-                <tr>
-                    <td>{{ balance.coin }}</td>
-                    <td>{{ balance.balance }}</td>
-                    <td>{{ balance.value_in_usd }}</td>
-                </tr>
-                {% endfor %}
-            </table>
-            <h3>Toplam Değer (USD): {{ total_value_in_usd }}</h3>
-            {% if total_value_in_try is not none %}
-                <h3>Toplam Değer: (TRY): {{ total_value_in_try }}</h3>
-            {% endif %}
-        {% endif %}
+        <h1>Instagram Profile of {{ user_data['username'] }}</h1>
+        <img src="data:image/jpeg;base64,{{ user_data['profile_pic_base64'] }}" alt="Profile Picture" >
+        <p><strong>Username:</strong> {{ user_data['username'] }}</p>
+        <p><strong>Full Name:</strong> {{ user_data['full_name'] }}</p>
+        <p><strong>Followers:</strong> {{ user_data['edge_followed_by']['count'] }}</p>
+        <p><strong>Following:</strong> {{ user_data['edge_follow']['count'] }}</p>
+        <p><strong>Biography:</strong> {{ user_data['biography'] }}</p>
     </body>
     </html>
-    '''
+    """
+    
+    # Render the HTML with the user's data
+    return render_template_string(html_template, user_data=user_data)
 
-    return render_template_string(html_content, balances=balances, total_value_in_usd=total_value_in_usd, total_value_in_try=total_value_in_try)
-
+# Run the Flask application
 if __name__ == '__main__':
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True)
