@@ -59,7 +59,7 @@ def profile():
         <img src="data:image/jpeg;base64,{{ user_data['profile_pic_base64'] }}" alt="Profile Picture" >
         <p><strong>Username:</strong> {{ user_data['username'] }}</p>
         <p><strong>Full Name:</strong> {{ user_data['full_name'] }}</p>
-        <p><strong>Followers:</strong> {{ user_data['edge_followed_by']['count'] }}</p>
+        <p><strong>Followesrs:</strong> {{ user_data['edge_followed_by']['count'] }}</p>
         <p><strong>Following:</strong> {{ user_data['edge_follow']['count'] }}</p>
         <p><strong>Biography:</strong> {{ user_data['biography'] }}</p>
     </body>
