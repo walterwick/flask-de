@@ -1,93 +1,58 @@
-from flask import Flask, render_template, redirect, request, jsonify
-from io import BytesIO
+from flask import Flask, request, render_template_string, redirect
 import requests
-from instaloader import Instaloader, Profile
-import base64
 
 app = Flask(__name__)
 
-# Instaloader ile oturum açma
-insta = Instaloader()
+@app.route('/', methods=['GET'])
+def home():
+    return redirect("/usd?amount=1")
 
+@app.route('/usd', methods=['GET'])
+def get_usd_to_try():
+    amount = request.args.get('amount', default=1, type=float)
+    
+    # Binance API'den USDT/TRY döviz kuru bilgisi al
+    response = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=USDTTRY')
+    
+    # Yanıtı kontrol et
+    if response.status_code != 200:
+        return "API'den veri alınamadı. Lütfen daha sonra tekrar deneyin.", 500
+    
+    data = response.json()
+    
+    # Yanıtın içeriğini kontrol et
+    if 'price' not in data:
+        return f"Beklenmeyen yanıt: {data}", 500
+    
+    # USDT/TRY fiyatını al
+    try_price = float(data['price'])
+    
+    # Hesaplama
+    total_try = amount * try_price
+    
+    # HTML içeriği
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="tr">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>USDT to TRY</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; }}
+            .result {{ font-size: 24px; font-weight: bold; }}
+            .usd-price {{ font-size: 20px; margin-top: 20px; }}
+        </style>
+    </head>
+    <body>
+        <h1>USDT to TRY Hesaplama</h1>
+        <div class="result">{amount} USDT = {total_try:.2f} TRY</div>
+        <div class="usd-price">1 USDT = {try_price:.2f} TRY</div>
+    </body>
+    </html>
+    """
+    
+    return render_template_string(html_content)
 
-@app.route("/")
-def index():
-    # Yönlendirmeyi geçici olarak devre dışı bırakmak için yorum satırı ekleyin
-    # return render_template("index.html")
-
-    # Kullanıcıyı doğrudan profile yönlendir
-    return redirect("/profile?username=emineey41")
-
-@app.route("/profile")
-def profile():
-    username = request.args.get("username")
-
-    if username:
-        try:
-            profile = Profile.from_username(insta.context, username)
-
-            # Profile information dictionary
-            data = {
-                "username": profile.username,
-                "post_count": profile.mediacount,
-                "followers": profile.followers,
-                "followees": profile.followees,
-                "bio": profile.biography,
-                "profile_pic_url": profile.profile_pic_url,
-                "full_name": profile.full_name,  # Might not always be available
-            }
-
-            # Profil resmini Base64 formatına çevirerek HTML içinde görüntülemek için
-            response = requests.get(data["profile_pic_url"])
-            profile_pic_base64 = base64.b64encode(response.content).decode('utf-8')
-
-            # HTML olarak parse ederek profil bilgilerini ve resmi göster
-            html_content = f"""
-            <!DOCTYPE html>
-<html lang="en">
-
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Instagram Profil Bilgileri</title>
-    <link rel="shortcut icon" href="data:image/jpeg;base64,{ profile_pic_base64 }" type="image/x-icon">
-
-</head>
-
-<body>
-
-  <div class="data">
-            <h1>Instagram Profil Bilgileri '{data['full_name']}'</h1>
-            <h2>Kullanıcı Adı: {data['username']}</h2>
-            <p>Gönderi Sayısı: {data['post_count']}</p>
-            <p>Takipçiler: {data['followers']}</p>
-            <p>Takip Edilenler: {data['followees']}</p>
-            <p>Biyografi: {data['bio']}</p>
-            <p>Tam0 Ad:{data['full_name']}</p>
-            <a href="{data['profile_pic_url']}">pfp</a>
-
-            <img src="data:image/jpeg;base64,{profile_pic_base64}" alt="Profil Resmi">
-             </div>
-
-  <style>
-    h1 {{
-      color: blue
-    }}
-  </style>
-
-</body>
-
-</html>
-
-            """
-
-            return html_content
-
-        except Exception as e:
-            # Handle errors gracefully
-            return f"Hata: {str(e)}"
-    else:
-        return "Kullanıcı adı eksik & hatalı"
-
-if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000) #host paametresi diğer ip'lerden erişmek için
+if __name__ == '__main__':
+    app.run(debug=True)
